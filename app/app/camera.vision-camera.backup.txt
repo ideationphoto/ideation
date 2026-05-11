@@ -1,0 +1,130 @@
+// BACKUP: react-native-vision-camera 버전 (EAS Build용)
+import React, { useRef, useState, useEffect } from "react";
+import { View, Text, StyleSheet, TouchableOpacity, GestureResponderEvent } from "react-native";
+import { Camera, useCameraDevice, useCameraPermission } from "react-native-vision-camera";
+import { useLocalSearchParams, useRouter } from "expo-router";
+import { AnalysisResult } from "../services/api";
+import Overlay from "../components/Overlay";
+
+const getDistance = (touches: GestureResponderEvent["nativeEvent"]["touches"]) => {
+  const [t1, t2] = touches;
+  return Math.sqrt(Math.pow(t1.pageX - t2.pageX, 2) + Math.pow(t1.pageY - t2.pageY, 2));
+};
+
+export default function CameraScreen() {
+  const { analysis: analysisStr } = useLocalSearchParams<{ analysis: string }>();
+  const analysis: AnalysisResult = JSON.parse(analysisStr);
+
+  const device = useCameraDevice("back");
+  const { hasPermission, requestPermission } = useCameraPermission();
+
+  const minZoom = device?.minZoom ?? 1;
+  const maxZoom = Math.min(device?.maxZoom ?? 10, 10);
+  const neutralZoom = device?.neutralZoom ?? 1;
+
+  const [zoom, setZoom] = useState(neutralZoom);
+  const [showGrid, setShowGrid] = useState(true);
+  const [captured, setCaptured] = useState(false);
+  const cameraRef = useRef<Camera>(null);
+  const initialDistanceRef = useRef(0);
+  const initialZoomRef = useRef(neutralZoom);
+  const router = useRouter();
+
+  useEffect(() => {
+    if (device) setZoom(device.neutralZoom);
+  }, [device?.id]);
+
+  const handleTouchStart = (e: GestureResponderEvent) => {
+    if (e.nativeEvent.touches.length === 2) {
+      initialDistanceRef.current = getDistance(e.nativeEvent.touches);
+      initialZoomRef.current = zoom;
+    }
+  };
+
+  const handleTouchMove = (e: GestureResponderEvent) => {
+    if (e.nativeEvent.touches.length === 2) {
+      const dist = getDistance(e.nativeEvent.touches);
+      const scale = dist / initialDistanceRef.current;
+      const next = Math.min(maxZoom, Math.max(minZoom, initialZoomRef.current * scale));
+      setZoom(next);
+    }
+  };
+
+  const zoomLabel = `${zoom.toFixed(1)}x`;
+
+  const takePicture = async () => {
+    if (!cameraRef.current || captured) return;
+    setCaptured(true);
+    await cameraRef.current.takePhoto({ flash: "off" });
+    setTimeout(() => setCaptured(false), 600);
+  };
+
+  if (!hasPermission) {
+    return (
+      <View style={styles.center}>
+        <Text style={styles.text}>카메라 권한이 필요합니다</Text>
+        <TouchableOpacity style={styles.btn} onPress={requestPermission}>
+          <Text style={styles.btnText}>권한 허용</Text>
+        </TouchableOpacity>
+      </View>
+    );
+  }
+
+  if (!device) {
+    return (
+      <View style={styles.center}>
+        <Text style={styles.text}>카메라를 찾을 수 없습니다</Text>
+      </View>
+    );
+  }
+
+  return (
+    <View style={styles.container} onTouchStart={handleTouchStart} onTouchMove={handleTouchMove}>
+      <Camera
+        ref={cameraRef}
+        style={StyleSheet.absoluteFill}
+        device={device}
+        isActive={true}
+        zoom={zoom}
+        photo={true}
+      />
+      <Overlay analysis={analysis} showGrid={showGrid} zoom={zoom} neutralZoom={neutralZoom} />
+      {captured && <View style={styles.flash} />}
+      <View style={styles.topBar}>
+        <TouchableOpacity style={styles.iconBtn} onPress={() => router.back()}>
+          <Text style={styles.iconText}>✕</Text>
+        </TouchableOpacity>
+        <View style={styles.zoomBadge}>
+          <Text style={styles.zoomText}>🔒 {zoomLabel}</Text>
+        </View>
+        <TouchableOpacity style={styles.iconBtn} onPress={() => setShowGrid(v => !v)}>
+          <Text style={[styles.iconText, !showGrid && styles.iconOff]}>⊞</Text>
+        </TouchableOpacity>
+      </View>
+      <View style={styles.bottomBar}>
+        <TouchableOpacity style={[styles.shutterOuter, captured && styles.shutterPressed]} onPress={takePicture} activeOpacity={0.8}>
+          <View style={styles.shutterInner} />
+        </TouchableOpacity>
+      </View>
+    </View>
+  );
+}
+
+const styles = StyleSheet.create({
+  container: { flex: 1, backgroundColor: "#000" },
+  center: { flex: 1, alignItems: "center", justifyContent: "center", backgroundColor: "#000" },
+  text: { color: "#fff", fontSize: 16, marginBottom: 16 },
+  btn: { backgroundColor: "#4f8ef7", borderRadius: 12, paddingVertical: 12, paddingHorizontal: 24 },
+  btnText: { color: "#fff", fontSize: 14, fontWeight: "bold" },
+  topBar: { position: "absolute", top: 56, left: 0, right: 0, flexDirection: "row", alignItems: "center", justifyContent: "space-between", paddingHorizontal: 20 },
+  iconBtn: { width: 44, height: 44, borderRadius: 22, backgroundColor: "rgba(0,0,0,0.5)", alignItems: "center", justifyContent: "center" },
+  iconText: { color: "#fff", fontSize: 20 },
+  iconOff: { opacity: 0.35 },
+  zoomBadge: { backgroundColor: "rgba(0,0,0,0.5)", borderRadius: 10, paddingVertical: 4, paddingHorizontal: 12, minWidth: 52, alignItems: "center" },
+  zoomText: { color: "#fff", fontSize: 14, fontWeight: "bold" },
+  bottomBar: { position: "absolute", bottom: 48, left: 0, right: 0, alignItems: "center" },
+  shutterOuter: { width: 76, height: 76, borderRadius: 38, borderWidth: 4, borderColor: "#fff", alignItems: "center", justifyContent: "center" },
+  shutterPressed: { borderColor: "#aaa" },
+  shutterInner: { width: 60, height: 60, borderRadius: 30, backgroundColor: "#fff" },
+  flash: { ...StyleSheet.absoluteFillObject, backgroundColor: "#fff", opacity: 0.6 },
+});

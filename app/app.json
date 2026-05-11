@@ -1,0 +1,25 @@
+{
+  "expo": {
+    "name": "구도 가이드",
+    "slug": "ideathon-app",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "plugins": [
+      "expo-router",
+      "expo-camera",
+      "expo-image-picker"
+    ],
+    "ios": {
+      "bundleIdentifier": "com.ideathon.app",
+      "infoPlist": {
+        "NSCameraUsageDescription": "카메라로 구도를 맞추기 위해 필요합니다.",
+        "NSPhotoLibraryUsageDescription": "레퍼런스 사진 선택을 위해 필요합니다."
+      }
+    },
+    "android": {
+      "package": "com.ideathon.app",
+      "permissions": ["CAMERA", "READ_EXTERNAL_STORAGE"],
+      "usesCleartextTraffic": true
+    }
+  }
+}
