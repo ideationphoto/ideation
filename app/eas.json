@@ -4,8 +4,12 @@
   },
   "build": {
     "preview": {
+      "distribution": "internal",
       "android": {
         "buildType": "apk"
+      },
+      "env": {
+        "EXPO_PUBLIC_BACKEND_URL": "http://13.125.250.115:8000"
       }
     }
   }
