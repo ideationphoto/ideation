@@ -7,13 +7,15 @@
     "plugins": [
       "expo-router",
       "expo-camera",
-      "expo-image-picker"
+      "expo-image-picker",
+      "expo-media-library"
     ],
     "ios": {
       "bundleIdentifier": "com.ideathon.app",
       "infoPlist": {
         "NSCameraUsageDescription": "카메라로 구도를 맞추기 위해 필요합니다.",
-        "NSPhotoLibraryUsageDescription": "레퍼런스 사진 선택을 위해 필요합니다."
+        "NSPhotoLibraryUsageDescription": "레퍼런스 사진 선택을 위해 필요합니다.",
+        "NSPhotoLibraryAddUsageDescription": "찍은 사진을 갤러리에 저장하기 위해 필요합니다."
       }
     },
     "android": {
@@ -21,6 +23,7 @@
       "permissions": [
         "android.permission.CAMERA",
         "android.permission.READ_EXTERNAL_STORAGE",
+        "android.permission.WRITE_EXTERNAL_STORAGE",
         "android.permission.CAMERA",
         "android.permission.RECORD_AUDIO"
       ],

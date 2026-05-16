@@ -1,5 +1,7 @@
 import { CameraView, useCameraPermissions } from "expo-camera";
 import { useRouter } from "expo-router";
+import * as ImagePicker from "expo-image-picker";
+import * as MediaLibrary from "expo-media-library";
 import React, { useRef, useState } from "react";
 import {
   Image,
@@ -8,7 +10,7 @@ import {
   TouchableOpacity,
   View,
 } from "react-native";
-import { getSelected } from "../services/store";
+import { getSelected, setImageUri, setPhotoSize } from "../services/store";
 
 type Mode = "ar" | "normal" | "silhouette";
 const MODES: { key: Mode; label: string }[] = [
@@ -21,7 +23,7 @@ const ZOOMS = [
   { label: "1x", expo: 0.15 },
   { label: "2x", expo: 0.45 },
 ];
-const TEAL = "#4ECDC4";
+const TEAL = "#20C5B2";
 
 export default function GuideScreen() {
   const candidate = getSelected();
@@ -30,6 +32,8 @@ export default function GuideScreen() {
   const [zoomIdx, setZoomIdx] = useState(1);
   const [capturing, setCapturing] = useState(false);
   const [flash, setFlash] = useState(false);
+  const [facing, setFacing] = useState<'back' | 'front'>('back');
+  const [mediaPermission, requestMediaPermission] = MediaLibrary.usePermissions();
   const cameraRef = useRef<CameraView>(null);
   const router = useRouter();
 
@@ -39,9 +43,34 @@ export default function GuideScreen() {
     setFlash(true);
     setTimeout(() => setFlash(false), 250);
     try {
-      await cameraRef.current.takePictureAsync({ quality: 0.9 });
+      const photo = await cameraRef.current.takePictureAsync({ quality: 0.9 });
+      if (photo?.uri) {
+        if (!mediaPermission?.granted) {
+          await requestMediaPermission();
+        }
+        await MediaLibrary.saveToLibraryAsync(photo.uri);
+      }
+    } catch (e) {
+      console.error("사진 저장 실패:", e);
     } finally {
       setCapturing(false);
+    }
+  };
+
+  const pickImage = async () => {
+    const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
+    if (status !== 'granted') return;
+
+    const result = await ImagePicker.launchImageLibraryAsync({
+      mediaTypes: ImagePicker.MediaTypeOptions.Images,
+      allowsEditing: false,
+      quality: 0.9,
+    });
+
+    if (!result.canceled && result.assets[0].uri) {
+      setImageUri(result.assets[0].uri);
+      setPhotoSize({ width: result.assets[0].width ?? 0, height: result.assets[0].height ?? 0 });
+      router.push("/preview");
     }
   };
 
@@ -64,7 +93,7 @@ export default function GuideScreen() {
       <CameraView
         ref={cameraRef}
         style={StyleSheet.absoluteFill}
-        facing="back"
+        facing={facing}
         zoom={ZOOMS[zoomIdx].expo}
       />
 
@@ -74,10 +103,8 @@ export default function GuideScreen() {
         {candidate && mode === "silhouette" && (
           <Image
             source={{ uri: candidate.preview_base64 }}
-            style={StyleSheet.absoluteFill}
+            style={[StyleSheet.absoluteFill, { opacity: 0.75 }]}
             resizeMode="cover"
-            // @ts-ignore
-            opacity={0.65}
           />
         )}
 
@@ -89,15 +116,15 @@ export default function GuideScreen() {
           <TouchableOpacity style={s.iconBtn} onPress={() => router.back()}>
             <Text style={s.iconText}>←</Text>
           </TouchableOpacity>
-          <TouchableOpacity style={s.iconBtn}>
-            <Text style={s.iconText}>⚡</Text>
+          <TouchableOpacity style={s.iconBtn} onPress={() => setFlash(!flash)}>
+            <Image source={require("../assets/Frame1.png")} style={s.topIcon} />
           </TouchableOpacity>
         </View>
       </View>
 
       {/* 하단 컨트롤: flex 레이아웃으로 뷰파인더 바로 아래에 위치 */}
       <View style={s.bottomSection}>
-        {/* 줌 버튼 */}
+        {/* 줌 버튼 플로팅 처리 */}
         <View style={s.zoomRow}>
           {ZOOMS.map(({ label }, i) => (
             <TouchableOpacity
@@ -105,9 +132,7 @@ export default function GuideScreen() {
               style={[s.zoomBtn, zoomIdx === i && s.zoomBtnActive]}
               onPress={() => setZoomIdx(i)}
             >
-              <Text style={[s.zoomLabel, zoomIdx === i && s.zoomLabelActive]}>
-                {label}
-              </Text>
+              <Text style={s.zoomLabel}>{label}</Text>
             </TouchableOpacity>
           ))}
         </View>
@@ -117,10 +142,10 @@ export default function GuideScreen() {
           {MODES.map(({ key, label }) => (
             <TouchableOpacity
               key={key}
-              style={[s.modeTab, mode === key && s.modeTabActive]}
+              style={s.modeTab}
               onPress={() => setMode(key)}
             >
-              <Text style={[s.modeLabel, mode === key && s.modeLabelActive]}>
+              <Text style={[s.modeLabel, mode === key ? s.modeLabelActive : s.modeLabelInactive]}>
                 {label}
               </Text>
             </TouchableOpacity>
@@ -129,7 +154,7 @@ export default function GuideScreen() {
 
         {/* 셔터 행 */}
         <View style={s.shutterRow}>
-          <TouchableOpacity style={s.thumbBtn} />
+          <TouchableOpacity style={s.thumbBtn} onPress={pickImage} activeOpacity={0.7} />
           <TouchableOpacity
             style={[s.shutterOuter, capturing && s.shutterPressed]}
             onPress={capture}
@@ -137,8 +162,12 @@ export default function GuideScreen() {
           >
             <View style={s.shutterInner} />
           </TouchableOpacity>
-          <TouchableOpacity style={s.iconBtn}>
-            <Text style={s.iconText}>⟳</Text>
+          {/* 카메라 전환 버튼 */}
+          <TouchableOpacity
+            style={s.flipBtn}
+            onPress={() => setFacing(f => f === 'back' ? 'front' : 'back')}
+          >
+            <Image source={require("../assets/Frame5.png")} style={s.topIcon} />
           </TouchableOpacity>
         </View>
       </View>
@@ -160,64 +189,73 @@ const s = StyleSheet.create({
 
   topBar: {
     position: "absolute",
-    top: 56,
+    top: 0,
     left: 0,
     right: 0,
+    height: 125,
+    backgroundColor: "#fff",
     flexDirection: "row",
     justifyContent: "space-between",
-    paddingHorizontal: 20,
+    alignItems: "flex-end",
+    paddingHorizontal: 24,
+    paddingBottom: 20,
   },
   iconBtn: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
-    backgroundColor: "rgba(0,0,0,0.45)",
+    width: 46,
+    height: 46,
+    borderRadius: 23,
     alignItems: "center",
     justifyContent: "center",
+    padding: 4,
   },
-  iconText: { color: "#fff", fontSize: 18 },
+  iconText: { color: "#000", fontSize: 18 },
+  topIcon: {
+    width: "100%",
+    height: "100%",
+    resizeMode: "contain",
+  },
 
   // 하단 컨트롤: flex 레이아웃 (absolute 제거)
   bottomSection: {
-    backgroundColor: "rgba(0,0,0,0.75)",
-    paddingBottom: 40,
-    paddingTop: 12,
-    gap: 12,
+    backgroundColor: "#fff",
+    height: 230,
+    paddingBottom: 80,
+    paddingTop: 15,
+    gap: 15,
   },
 
   zoomRow: {
+    position: "absolute",
+    top: -60,
     flexDirection: "row",
     justifyContent: "center",
-    gap: 8,
+    gap: 12,
     paddingHorizontal: 20,
+    width: "100%",
   },
   zoomBtn: {
-    paddingVertical: 5,
-    paddingHorizontal: 14,
-    borderRadius: 20,
-    backgroundColor: "rgba(255,255,255,0.15)",
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: "transparent",
+    alignItems: "center",
+    justifyContent: "center",
   },
-  zoomBtnActive: { backgroundColor: "rgba(255,255,255,0.3)" },
-  zoomLabel: { color: "rgba(255,255,255,0.6)", fontSize: 13, fontWeight: "600" },
-  zoomLabelActive: { color: "#fff" },
+  zoomBtnActive: { backgroundColor: "#7C7C7C" },
+  zoomLabel: { color: "#fff", fontSize: 13, fontWeight: "600" },
 
   modeRow: {
     flexDirection: "row",
     justifyContent: "center",
-    marginHorizontal: 20,
-    backgroundColor: "rgba(255,255,255,0.12)",
-    borderRadius: 22,
-    padding: 3,
+    gap: 40,
   },
   modeTab: {
-    flex: 1,
     paddingVertical: 8,
-    borderRadius: 20,
     alignItems: "center",
   },
-  modeTabActive: { backgroundColor: TEAL },
-  modeLabel: { color: "rgba(255,255,255,0.55)", fontSize: 13, fontWeight: "500" },
-  modeLabelActive: { color: "#fff", fontWeight: "700" },
+  modeLabel: { fontSize: 17, fontWeight: "600" },
+  modeLabelActive: { color: "#3ADFCC" },
+  modeLabelInactive: { color: "#B0B0B0" },
 
   shutterRow: {
     flexDirection: "row",
@@ -227,20 +265,28 @@ const s = StyleSheet.create({
     marginTop: 4,
   },
   thumbBtn: {
-    width: 48,
-    height: 48,
-    borderRadius: 10,
-    backgroundColor: "rgba(255,255,255,0.2)",
+    width: 50,
+    height: 50,
+    borderRadius: 64,
+    backgroundColor: "rgba(0,0,0,0.1)",
   },
-  shutterOuter: {
-    width: 76,
-    height: 76,
-    borderRadius: 38,
-    borderWidth: 4,
-    borderColor: "#fff",
+  flipBtn: {
+    width: 50,
+    height: 50,
+    borderRadius: 25,
+    backgroundColor: "rgba(0,0,0,0.05)",
     alignItems: "center",
     justifyContent: "center",
   },
-  shutterPressed: { borderColor: "#aaa" },
-  shutterInner: { width: 60, height: 60, borderRadius: 30, backgroundColor: "#fff" },
+  shutterOuter: {
+    width: 77,
+    height: 77,
+    borderRadius: 77 / 2,
+    borderWidth: 6,
+    borderColor: TEAL,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  shutterPressed: { opacity: 0.7 },
+  shutterInner: { width: 54, height: 54, borderRadius: 27, backgroundColor: "#fff" },
 });
