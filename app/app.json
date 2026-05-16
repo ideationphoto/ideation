@@ -18,8 +18,19 @@
     },
     "android": {
       "package": "com.ideathon.app",
-      "permissions": ["CAMERA", "READ_EXTERNAL_STORAGE"],
+      "permissions": [
+        "android.permission.CAMERA",
+        "android.permission.READ_EXTERNAL_STORAGE",
+        "android.permission.CAMERA",
+        "android.permission.RECORD_AUDIO"
+      ],
       "usesCleartextTraffic": true
+    },
+    "extra": {
+      "router": {},
+      "eas": {
+        "projectId": "8226a167-bcb1-4d56-bfce-95d844c0de83"
+      }
     }
   }
 }

@@ -1,7 +1,7 @@
 // iOS 시뮬레이터: localhost:8000
 // Android 에뮬레이터: 10.0.2.2:8000
 // 실기기: PC의 로컬 IP (같은 와이파이 필수)
-const BACKEND_URL = "http://192.168.0.5:8000";
+const BACKEND_URL = "http://13.125.250.115:8000";
 
 export interface Position {
   x: number;
